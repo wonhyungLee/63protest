@@ -1,0 +1,43 @@
+name: ingest-official-sources
+
+on:
+  workflow_dispatch:
+    inputs:
+      source:
+        description: 'adapter key fragment, or all'
+        required: false
+        default: 'all'
+  schedule:
+    # KST 06:15, 09:15, 12:15, 15:15, 18:15, 21:15
+    - cron: '15 21,0,3,6,9,12 * * *'
+
+concurrency:
+  group: ingest-official-sources
+  cancel-in-progress: false
+
+jobs:
+  ingest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: sudo apt-get update && sudo apt-get install -y poppler-utils
+
+      - run: npm ci
+
+      - name: Run ingestion
+        run: |
+          if [ "${{ github.event.inputs.source || 'all' }}" = "all" ]; then
+            npm run ingest -- --limit=10
+          else
+            npm run ingest -- --limit=10 --source="${{ github.event.inputs.source }}"
+          fi
+        env:
+          SUPABASE_URL: ${{ vars.PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
