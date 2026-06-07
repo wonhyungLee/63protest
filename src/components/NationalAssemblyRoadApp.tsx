@@ -8,21 +8,18 @@ import {
   FileText,
   Filter,
   Loader2,
-  Map as MapIcon,
   MapPin,
   MessageCircle,
   Navigation,
-  Route,
   Search,
   Send,
   ShieldCheck,
-  TrafficCone,
   UsersRound,
 } from 'lucide-react'
-import { type CSSProperties, useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { addDays, formatKoreanDate, formatUpdatedAt, itemMatchesDateFilter, sortItems, toDateKey } from '@/lib/date'
 import { createDemoItems, createDemoTips } from '@/lib/demo-data'
-import { buildMapQuery, googleMapsSearchUrl, kakaoMapSearchUrl, naverMapWebFallbackUrl, splitRoute } from '@/lib/map-links'
+import { buildMapQuery, googleMapsSearchUrl, kakaoMapSearchUrl, naverMapWebFallbackUrl } from '@/lib/map-links'
 import { findRegionByCode, findRegionBySlug, regions } from '@/lib/regions'
 import { fetchPublicItems, fetchPublicTips, hasSupabaseConfig, submitTip } from '@/lib/supabase.browser'
 import type { AppPanel, DateFilter, ItemKind, KindFilter, PublicItem, PublicTip, Region, TipCategory } from '@/lib/types'
@@ -38,26 +35,40 @@ const kindFilters: Array<{ value: KindFilter; label: string }> = [
 ]
 
 const panelOptions: Array<{ value: AppPanel; label: string; icon: typeof CalendarDays }> = [
-  { value: 'schedule', label: '일정', icon: CalendarDays },
-  { value: 'tips', label: '팁', icon: MessageCircle },
-  { value: 'sources', label: '원문', icon: FileText },
+  { value: 'schedule', label: '관련 후보', icon: CalendarDays },
+  { value: 'tips', label: '제보', icon: MessageCircle },
+  { value: 'sources', label: '공식 자료', icon: FileText },
 ]
 
 const kindMeta: Record<ItemKind, { label: string; icon: typeof CalendarDays; tone: string }> = {
   assembly: { label: '집회', icon: UsersRound, tone: 'assembly' },
   event: { label: '행사', icon: CalendarDays, tone: 'event' },
-  traffic: { label: '교통통제', icon: TrafficCone, tone: 'traffic' },
-  notice: { label: '공지', icon: ShieldCheck, tone: 'notice' },
+  traffic: { label: '교통통제', icon: ShieldCheck, tone: 'traffic' },
+  notice: { label: '공지', icon: FileText, tone: 'notice' },
 }
 
 const tipCategoryLabels: Record<TipCategory, string> = {
   move: '이동',
-  prepare: '준비물',
+  prepare: '준비',
   accessibility: '접근성',
   return_home: '귀가',
   correction: '정정',
   other: '기타',
 }
+
+const electionKeywords = [
+  '6.3',
+  '6·3',
+  '63지방',
+  '지방선거',
+  '재선거',
+  '부정선거',
+  '선거무효',
+  '선관위',
+  '투표용지',
+  '사전투표',
+  '개표',
+]
 
 const privacyPatterns = [/\b\d{2,3}-\d{3,4}-\d{4}\b/, /\b\d{6}-\d{7}\b/, /\b\d{10,11}\b/]
 
@@ -67,13 +78,13 @@ export default function NationalAssemblyRoadApp() {
   const [items, setItems] = useState<PublicItem[]>(() => createDemoItems())
   const [tips, setTips] = useState<PublicTip[]>(() => createDemoTips())
   const [selectedRegionCode, setSelectedRegionCode] = useState('KR-11')
-  const [dateFilter, setDateFilter] = useState<DateFilter>('today')
+  const [dateFilter, setDateFilter] = useState<DateFilter>('week')
   const [kindFilter, setKindFilter] = useState<KindFilter>('all')
   const [panel, setPanel] = useState<AppPanel>('schedule')
   const [query, setQuery] = useState('')
   const [dataMode, setDataMode] = useState<DataMode>(hasSupabaseConfig() ? 'loading' : 'demo')
   const [statusMessage, setStatusMessage] = useState(
-    hasSupabaseConfig() ? '공개 데이터를 불러오는 중' : '시연 데이터 표시 중',
+    hasSupabaseConfig() ? '공개 데이터 확인 중' : '시연 데이터 표시 중',
   )
 
   useEffect(() => {
@@ -81,9 +92,7 @@ export default function NationalAssemblyRoadApp() {
     const regionSlug = params.get('region') || window.location.hash.replace('#', '')
     const region = regionSlug ? findRegionBySlug(regionSlug) : null
 
-    if (region) {
-      setSelectedRegionCode(region.code)
-    }
+    if (region) setSelectedRegionCode(region.code)
   }, [])
 
   useEffect(() => {
@@ -100,7 +109,7 @@ export default function NationalAssemblyRoadApp() {
       if (!hasSupabaseConfig()) return
 
       setDataMode('loading')
-      setStatusMessage('Supabase 공개 데이터를 확인 중')
+      setStatusMessage('Supabase 공개 데이터 확인 중')
 
       try {
         const [itemResult, tipResult] = await Promise.all([fetchPublicItems(), fetchPublicTips()])
@@ -111,24 +120,24 @@ export default function NationalAssemblyRoadApp() {
 
         if (itemResult.error) {
           setDataMode('error')
-          setStatusMessage('공개 일정 조회 실패, 시연 데이터 표시')
+          setStatusMessage('조회 실패, 시연 데이터 표시')
           return
         }
 
         if (publicItems.length === 0) {
           setDataMode('demo')
-          setStatusMessage('공개 일정이 없어 시연 데이터 표시')
+          setStatusMessage('운영 데이터 없음')
           return
         }
 
         setItems(publicItems)
-        setTips(publicTips.length > 0 ? publicTips : [])
+        setTips(publicTips)
         setDataMode('live')
-        setStatusMessage('Supabase 공개 데이터 연결됨')
+        setStatusMessage('운영 데이터 연결됨')
       } catch {
         if (!cancelled) {
           setDataMode('error')
-          setStatusMessage('데이터 연결 오류, 시연 데이터 표시')
+          setStatusMessage('연결 오류, 시연 데이터 표시')
         }
       }
     }
@@ -147,55 +156,42 @@ export default function NationalAssemblyRoadApp() {
     [items, selectedRegionCode],
   )
 
-  const filteredItems = useMemo(() => {
+  const candidateItems = useMemo(() => regionItems.filter(isElectionRelatedItem), [regionItems])
+  const referenceItems = useMemo(() => regionItems.filter((item) => !isElectionRelatedItem(item)), [regionItems])
+
+  const filteredCandidates = useMemo(() => {
     const keyword = query.trim().toLowerCase()
 
     return sortItems(
-      regionItems.filter((item) => {
+      candidateItems.filter((item) => {
         const matchesDate = itemMatchesDateFilter(item, dateFilter)
         const matchesKind = kindFilter === 'all' || item.kind === kindFilter
-        const searchableText = [item.title, item.place_name, item.route_text, item.traffic_note, item.agency]
-          .filter(Boolean)
-          .join(' ')
-          .toLowerCase()
+        const searchableText = getSearchText(item)
 
         return matchesDate && matchesKind && (!keyword || searchableText.includes(keyword))
       }),
     )
-  }, [dateFilter, kindFilter, query, regionItems])
+  }, [candidateItems, dateFilter, kindFilter, query])
 
   const regionTips = useMemo(
     () => tips.filter((tip) => tip.region_code === selectedRegionCode),
     [selectedRegionCode, tips],
   )
 
-  const todayCount = useMemo(
-    () => regionItems.filter((item) => itemMatchesDateFilter(item, 'today')).length,
-    [regionItems],
-  )
-  const tomorrowCount = useMemo(
-    () => regionItems.filter((item) => itemMatchesDateFilter(item, 'tomorrow')).length,
-    [regionItems],
-  )
-  const weekCount = useMemo(
-    () => regionItems.filter((item) => itemMatchesDateFilter(item, 'week')).length,
-    [regionItems],
-  )
-  const routeCount = useMemo(
-    () => regionItems.filter((item) => Boolean(item.route_text || item.traffic_note)).length,
-    [regionItems],
-  )
+  const todayCount = candidateItems.filter((item) => itemMatchesDateFilter(item, 'today')).length
+  const weekCount = candidateItems.filter((item) => itemMatchesDateFilter(item, 'week')).length
+  const officialCount = regionItems.length
 
   return (
     <div className="app-shell">
       <header className="topbar">
         <div className="brand-block">
           <span className="brand-mark" aria-hidden="true">
-            <MapIcon size={22} />
+            <ShieldCheck size={21} />
           </span>
           <span>
-            <strong>전국 집회길</strong>
-            <small>공식 원문 기반 지역 안내</small>
+            <strong>6.3 집회 모니터</strong>
+            <small>재선거 요구·선거 관련 집회 후보</small>
           </span>
         </div>
 
@@ -203,57 +199,27 @@ export default function NationalAssemblyRoadApp() {
       </header>
 
       <main className="workspace">
-        <section className="region-workbench" aria-label="지역 선택">
-          <div className="headline">
-            <p className="eyebrow">전국 공식 일정</p>
-            <h1>지역을 고르면 오늘의 집회, 행사, 교통통제가 정리됩니다.</h1>
-          </div>
-
-          <RegionMap selectedRegionCode={selectedRegionCode} onSelect={setSelectedRegionCode} />
-
-          <div className="region-strip" aria-label="지역 빠른 선택">
-            {regions.map((region) => (
-              <button
-                key={region.code}
-                className={region.code === selectedRegionCode ? 'region-chip is-active' : 'region-chip'}
-                style={{ '--chip-accent': region.accent, '--chip-tint': region.tint } as CSSProperties}
-                type="button"
-                onClick={() => setSelectedRegionCode(region.code)}
-              >
-                {region.shortName}
-              </button>
-            ))}
+        <section className="overview-panel" aria-label="요약">
+          <div className="overview-copy">
+            <p className="eyebrow">출처 기반 후보 목록</p>
+            <h1>6.3 지방선거 관련 집회만 먼저 추려서 보여줍니다.</h1>
+            <p>
+              경찰 신고 자료는 참고 출처로 유지하고, 선거·재선거 관련 키워드가 확인된 일정만 기본 목록에 올립니다.
+            </p>
           </div>
 
           <div className="metric-grid" aria-label={`${selectedRegion.name} 요약`}>
-            <MetricTile label="오늘" value={todayCount} />
-            <MetricTile label="내일" value={tomorrowCount} />
-            <MetricTile label="이번 주" value={weekCount} />
-            <MetricTile label="이동 영향" value={routeCount} />
+            <MetricTile label="오늘 후보" value={todayCount} />
+            <MetricTile label="이번 주 후보" value={weekCount} />
+            <MetricTile label="공식 자료" value={officialCount} />
+            <MetricTile label="제보" value={regionTips.length} />
           </div>
         </section>
 
-        <section className="content-workbench" aria-label={`${selectedRegion.name} 일정과 팁`}>
-          <div className="content-header">
-            <div>
-              <p className="region-kicker" style={{ color: selectedRegion.accent }}>
-                {selectedRegion.name}
-              </p>
-              <h2>{selectedRegion.name} 일정</h2>
-              <p>{getRegionSummary(filteredItems.length, regionTips.length)}</p>
-            </div>
-            <button
-              className="source-shortcut"
-              type="button"
-              title="원문 목록 보기"
-              onClick={() => setPanel('sources')}
-            >
-              <FileText size={16} />
-              원문 목록
-            </button>
-          </div>
+        <section className="control-panel" aria-label="필터">
+          <RegionStrip selectedRegionCode={selectedRegionCode} onSelect={setSelectedRegionCode} />
 
-          <div className="toolbar" aria-label="일정 필터">
+          <div className="toolbar">
             <div className="segmented-control" role="group" aria-label="날짜 필터">
               {dateFilters.map((filter) => (
                 <button
@@ -286,42 +252,58 @@ export default function NationalAssemblyRoadApp() {
               <input
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
-                placeholder="장소, 행사명, 역명"
+                placeholder="장소, 키워드, 출처"
                 type="search"
               />
             </label>
           </div>
 
-          <PanelTabs activePanel={panel} onChange={setPanel} className="desktop-tabs" />
+          <PanelTabs activePanel={panel} onChange={setPanel} />
+        </section>
 
-          {panel === 'schedule' && (
-            <SchedulePanel
-              dataMode={dataMode}
-              items={filteredItems}
-              region={selectedRegion}
-              resetFilters={() => {
-                setDateFilter('all')
-                setKindFilter('all')
-                setQuery('')
-              }}
-            />
-          )}
+        <section className="content-grid" aria-label={`${selectedRegion.name} 데이터`}>
+          <div className="primary-column">
+            <div className="content-heading">
+              <div>
+                <p className="region-kicker">{selectedRegion.name}</p>
+                <h2>{getPanelTitle(panel, selectedRegion.name)}</h2>
+              </div>
+              <p>{getPanelSummary(panel, filteredCandidates.length, officialCount, regionTips.length)}</p>
+            </div>
 
-          {panel === 'tips' && (
-            <TipsPanel
-              dataMode={dataMode}
-              items={regionItems}
-              onTipCreated={(tip) => setTips((current) => [tip, ...current])}
-              region={selectedRegion}
-              tips={regionTips}
-            />
-          )}
+            {panel === 'schedule' && (
+              <SchedulePanel
+                dataMode={dataMode}
+                items={filteredCandidates}
+                referenceCount={referenceItems.length}
+                region={selectedRegion}
+                resetFilters={() => {
+                  setDateFilter('all')
+                  setKindFilter('all')
+                  setQuery('')
+                }}
+              />
+            )}
 
-          {panel === 'sources' && <SourcesPanel dataMode={dataMode} items={regionItems} region={selectedRegion} />}
+            {panel === 'tips' && (
+              <TipsPanel
+                dataMode={dataMode}
+                items={candidateItems}
+                onTipCreated={(tip) => setTips((current) => [tip, ...current])}
+                region={selectedRegion}
+                tips={regionTips}
+              />
+            )}
+
+            {panel === 'sources' && <SourcesPanel dataMode={dataMode} items={regionItems} region={selectedRegion} />}
+          </div>
+
+          <aside className="support-panel" aria-label="운영 상태">
+            <DataNotice mode={dataMode} />
+            <ReferenceList items={referenceItems} region={selectedRegion} />
+          </aside>
         </section>
       </main>
-
-      <PanelTabs activePanel={panel} onChange={setPanel} className="bottom-tabs" />
     </div>
   )
 }
@@ -337,60 +319,25 @@ function StatusPill({ mode, message }: { mode: DataMode; message: string }) {
   )
 }
 
-function RegionMap({
+function RegionStrip({
   selectedRegionCode,
   onSelect,
 }: {
   selectedRegionCode: string
   onSelect: (code: string) => void
 }) {
-  const selectedRegion = findRegionByCode(selectedRegionCode)
-
   return (
-    <div className="map-tool">
-      <div className="map-canvas" aria-label="전국 지역 지도">
-        <svg className="korea-shape" viewBox="0 0 320 480" role="img" aria-label="대한민국 지도 배경">
-          <path
-            d="M144 30c40 10 81 33 91 72 7 28-10 52-3 78 7 27 37 39 43 70 8 38-18 66-37 94-22 32-17 72-44 96-30 26-75 6-106-15-27-19-48-45-51-79-3-35 18-60 22-91 5-34-16-62-10-96 7-39 45-51 61-82 8-15 13-33 34-47Z"
-            fill="currentColor"
-          />
-          <path
-            d="M98 430c22-12 55-8 75 4 10 6 8 18-4 24-23 12-55 8-75-4-10-6-8-18 4-24Z"
-            fill="currentColor"
-          />
-        </svg>
-
-        <svg className="route-lines" viewBox="0 0 100 100" aria-hidden="true">
-          <path d="M42 22 C54 34, 49 47, 65 63" />
-          <path d="M45 77 C52 68, 62 70, 73 78" />
-          <path d="M43 22 C36 31, 39 43, 48 49" />
-        </svg>
-
-        {regions.map((region) => (
-          <button
-            key={region.code}
-            className={region.code === selectedRegionCode ? 'map-node is-active' : 'map-node'}
-            style={
-              {
-                '--node-x': `${region.mapX}%`,
-                '--node-y': `${region.mapY}%`,
-                '--node-accent': region.accent,
-                '--node-tint': region.tint,
-              } as CSSProperties
-            }
-            title={`${region.name} 선택`}
-            type="button"
-            onClick={() => onSelect(region.code)}
-          >
-            <span>{region.shortName}</span>
-          </button>
-        ))}
-      </div>
-
-      <div className="map-caption">
-        <MapPin size={16} />
-        <span>{selectedRegion.name} 선택됨</span>
-      </div>
+    <div className="region-strip" aria-label="지역 선택">
+      {regions.map((region) => (
+        <button
+          key={region.code}
+          className={region.code === selectedRegionCode ? 'region-chip is-active' : 'region-chip'}
+          type="button"
+          onClick={() => onSelect(region.code)}
+        >
+          {region.shortName}
+        </button>
+      ))}
     </div>
   )
 }
@@ -407,14 +354,12 @@ function MetricTile({ label, value }: { label: string; value: number }) {
 function PanelTabs({
   activePanel,
   onChange,
-  className,
 }: {
   activePanel: AppPanel
   onChange: (panel: AppPanel) => void
-  className?: string
 }) {
   return (
-    <nav className={`panel-tabs ${className || ''}`} aria-label="화면 탭">
+    <nav className="panel-tabs" aria-label="화면 탭">
       {panelOptions.map((option) => {
         const Icon = option.icon
 
@@ -438,22 +383,24 @@ function PanelTabs({
 function SchedulePanel({
   dataMode,
   items,
+  referenceCount,
   region,
   resetFilters,
 }: {
   dataMode: DataMode
   items: PublicItem[]
+  referenceCount: number
   region: Region
   resetFilters: () => void
 }) {
   if (items.length === 0) {
     return (
       <EmptyState
-        actionLabel="전체 일정 보기"
+        actionLabel="필터 초기화"
         icon={CalendarDays}
-        message={`${region.name} 조건에 맞는 일정이 없습니다.`}
+        message={`${region.name}에서 조건에 맞는 6.3 관련 후보가 아직 없습니다. 공식 자료 ${referenceCount}건은 참고 자료에 보관되어 있습니다.`}
         onAction={resetFilters}
-        title="일정 없음"
+        title="관련 후보 없음"
       />
     )
   }
@@ -463,7 +410,7 @@ function SchedulePanel({
       {dataMode !== 'live' && (
         <div className="data-note">
           <Database size={16} />
-          <span>현재 화면은 시연 데이터입니다. Supabase 공개 데이터가 채워지면 자동으로 실제 일정이 표시됩니다.</span>
+          <span>현재 화면은 시연 데이터입니다. 운영 데이터가 연결되면 실제 후보만 표시됩니다.</span>
         </div>
       )}
 
@@ -487,6 +434,7 @@ function ScheduleCard({ item, region }: { item: PublicItem; region: Region }) {
           {meta.label}
         </span>
         <span className="date-badge">{formatKoreanDate(item.event_date)}</span>
+        <span className="verify-badge">키워드 확인</span>
       </div>
 
       <h3>{item.title}</h3>
@@ -495,15 +443,12 @@ function ScheduleCard({ item, region }: { item: PublicItem; region: Region }) {
         <Fact icon={Clock3} label="시간" value={item.time_text || joinTime(item.time_start, item.time_end)} />
         <Fact icon={MapPin} label="장소" value={item.place_name || '장소 미정'} />
         {item.participants_text && <Fact icon={UsersRound} label="인원" value={item.participants_text} />}
-        {item.traffic_note && <Fact icon={TrafficCone} label="교통" value={item.traffic_note} />}
       </div>
-
-      <RouteChips region={region} routeText={item.route_text} />
 
       <div className="card-actions">
         <MapButtons query={mapQuery} />
         {item.source_url && (
-          <a className="icon-link" href={item.source_url} target="_blank" rel="noreferrer" title="공식 원문 열기">
+          <a className="icon-link" href={item.source_url} target="_blank" rel="noreferrer" title="원문 열기">
             <ExternalLink size={16} />
             원문
           </a>
@@ -531,40 +476,6 @@ function Fact({ icon: Icon, label, value }: { icon: typeof CalendarDays; label: 
   )
 }
 
-function RouteChips({ region, routeText }: { region: Region; routeText?: string | null }) {
-  const points = splitRoute(routeText)
-
-  if (points.length === 0) return null
-
-  return (
-    <div className="route-block">
-      <div className="route-heading">
-        <Route size={16} />
-        <span>경로</span>
-      </div>
-      <div className="route-chip-row">
-        {points.map((point, index) => {
-          const query = buildMapQuery(region.name, point)
-
-          return (
-            <a
-              key={`${point}-${index}`}
-              className="route-chip"
-              href={googleMapsSearchUrl(query)}
-              target="_blank"
-              rel="noreferrer"
-              title={`${point} 지도 검색`}
-            >
-              <span>{index + 1}</span>
-              {point}
-            </a>
-          )
-        })}
-      </div>
-    </div>
-  )
-}
-
 function MapButtons({ query }: { query: string }) {
   return (
     <div className="map-buttons" aria-label="지도 검색">
@@ -577,7 +488,7 @@ function MapButtons({ query }: { query: string }) {
         카카오
       </a>
       <a href={googleMapsSearchUrl(query)} target="_blank" rel="noreferrer" title="Google 지도 검색">
-        <MapIcon size={15} />
+        <Search size={15} />
         Google
       </a>
     </div>
@@ -601,9 +512,9 @@ function TipsPanel({
     <div className="tips-layout">
       <TipComposer dataMode={dataMode} items={items} onTipCreated={onTipCreated} region={region} />
 
-      <div className="tip-list" aria-label={`${region.name} 팁 목록`}>
+      <div className="tip-list" aria-label={`${region.name} 제보 목록`}>
         {tips.length === 0 ? (
-          <EmptyState icon={MessageCircle} message={`${region.name}에 공개된 팁이 없습니다.`} title="팁 없음" />
+          <EmptyState icon={MessageCircle} message={`${region.name}에 공개된 제보가 없습니다.`} title="제보 없음" />
         ) : (
           tips.map((tip) => <TipCard key={tip.id} tip={tip} />)
         )}
@@ -623,7 +534,7 @@ function TipComposer({
   onTipCreated: (tip: PublicTip) => void
   region: Region
 }) {
-  const [category, setCategory] = useState<TipCategory>('move')
+  const [category, setCategory] = useState<TipCategory>('correction')
   const [body, setBody] = useState('')
   const [nickname, setNickname] = useState('')
   const [itemId, setItemId] = useState('')
@@ -637,7 +548,7 @@ function TipComposer({
     const normalizedNickname = nickname.trim().slice(0, 30)
 
     if (normalizedBody.length < 5 || normalizedBody.length > 500) {
-      setMessage('팁은 5자 이상 500자 이하로 작성해 주세요.')
+      setMessage('제보는 5자 이상 500자 이하로 작성해 주세요.')
       return
     }
 
@@ -678,19 +589,9 @@ function TipComposer({
       setBody('')
       setNickname('')
       setItemId('')
-      setMessage(persistedId ? '팁이 공개되었습니다.' : '브라우저에 임시 표시했습니다.')
+      setMessage(persistedId ? '제보가 등록되었습니다.' : '브라우저에 임시 표시했습니다.')
     } catch {
-      onTipCreated({
-        id: `local-tip-${Date.now()}`,
-        region_code: region.code,
-        item_id: itemId || null,
-        category,
-        body: normalizedBody,
-        nickname: normalizedNickname || '익명',
-        created_at: new Date().toISOString(),
-      })
-      setBody('')
-      setMessage('제출 API 응답이 없어 브라우저에 임시 표시했습니다.')
+      setMessage('제출 API 응답이 없어 저장하지 못했습니다.')
     } finally {
       setSubmitting(false)
     }
@@ -700,13 +601,13 @@ function TipComposer({
     <form className="tip-composer" onSubmit={handleSubmit}>
       <div className="composer-header">
         <div>
-          <p className="eyebrow">지역 팁</p>
-          <h3>{region.name} 메모</h3>
+          <p className="eyebrow">현장 제보</p>
+          <h3>{region.name} 후보 보강</h3>
         </div>
         <span>{body.trim().length}/500</span>
       </div>
 
-      <div className="category-grid" role="group" aria-label="팁 분류">
+      <div className="category-grid" role="group" aria-label="제보 분류">
         {(Object.keys(tipCategoryLabels) as TipCategory[]).map((value) => (
           <button
             key={value}
@@ -723,11 +624,11 @@ function TipComposer({
         value={body}
         maxLength={500}
         onChange={(event) => setBody(event.target.value)}
-        placeholder="대중교통, 접근성, 귀가, 준비물 정보를 남겨 주세요."
+        placeholder="날짜, 시간, 장소, 근거 링크를 함께 남겨 주세요."
       />
 
       <div className="composer-row">
-        <select value={itemId} onChange={(event) => setItemId(event.target.value)} aria-label="관련 일정">
+        <select value={itemId} onChange={(event) => setItemId(event.target.value)} aria-label="관련 후보">
           <option value="">지역 전체</option>
           {items.slice(0, 20).map((item) => (
             <option key={item.id} value={item.id}>
@@ -746,7 +647,7 @@ function TipComposer({
 
       <div className="composer-actions">
         <p aria-live="polite">{message}</p>
-        <button className="primary-button" disabled={submitting} type="submit" title="팁 등록">
+        <button className="primary-button" disabled={submitting} type="submit" title="제보 등록">
           {submitting ? <Loader2 className="spin" size={17} /> : <Send size={17} />}
           등록
         </button>
@@ -769,19 +670,10 @@ function TipCard({ tip }: { tip: PublicTip }) {
 }
 
 function SourcesPanel({ dataMode, items, region }: { dataMode: DataMode; items: PublicItem[]; region: Region }) {
-  const sources = useMemo(() => {
-    const sourceMap = new globalThis.Map<string, PublicItem>()
-
-    for (const item of items) {
-      const key = `${item.agency || '공개 원문'}-${item.source_title || item.source_url || item.id}`
-      if (!sourceMap.has(key)) sourceMap.set(key, item)
-    }
-
-    return [...sourceMap.values()]
-  }, [items])
+  const sources = useMemo(() => collectSources(items), [items])
 
   if (sources.length === 0) {
-    return <EmptyState icon={FileText} message={`${region.name}에 연결된 원문이 없습니다.`} title="원문 없음" />
+    return <EmptyState icon={FileText} message={`${region.name}에 연결된 공식 자료가 없습니다.`} title="자료 없음" />
   }
 
   return (
@@ -794,22 +686,78 @@ function SourcesPanel({ dataMode, items, region }: { dataMode: DataMode; items: 
       )}
 
       {sources.map((source) => (
-        <article className="source-card" key={`${source.id}-${source.source_title}`}>
-          <div className="source-icon">
-            <FileText size={20} />
-          </div>
-          <div>
-            <p>{source.agency || '공개 원문'}</p>
-            <h3>{source.source_title || source.title}</h3>
-            <span>{formatUpdatedAt(source.updated_at)}</span>
-          </div>
-          {source.source_url ? (
-            <a href={source.source_url} target="_blank" rel="noreferrer" title="원문 열기">
-              <ExternalLink size={16} />
-            </a>
-          ) : null}
-        </article>
+        <SourceCard key={`${source.id}-${source.source_title || source.title}`} item={source} />
       ))}
+    </div>
+  )
+}
+
+function SourceCard({ item }: { item: PublicItem }) {
+  return (
+    <article className="source-card">
+      <div className="source-icon">
+        <FileText size={20} />
+      </div>
+      <div>
+        <p>{item.agency || '공개 원문'}</p>
+        <h3>{item.source_title || item.title}</h3>
+        <span>{formatUpdatedAt(item.updated_at)}</span>
+      </div>
+      {item.source_url ? (
+        <a href={item.source_url} target="_blank" rel="noreferrer" title="원문 열기">
+          <ExternalLink size={16} />
+        </a>
+      ) : null}
+    </article>
+  )
+}
+
+function DataNotice({ mode }: { mode: DataMode }) {
+  return (
+    <div className="notice-box">
+      <div className="notice-icon">
+        <ShieldCheck size={18} />
+      </div>
+      <div>
+        <h3>표시 기준</h3>
+        <p>
+          기본 목록은 6.3 지방선거, 재선거 요구, 선거 관련 키워드가 일정 제목·장소·원문명에 잡힌 항목만
+          보여줍니다.
+        </p>
+        <span>{mode === 'live' ? '운영 데이터 기준' : '시연 데이터 기준'}</span>
+      </div>
+    </div>
+  )
+}
+
+function ReferenceList({ items, region }: { items: PublicItem[]; region: Region }) {
+  const references = sortItems(items).slice(0, 5)
+
+  return (
+    <div className="reference-panel">
+      <div className="reference-heading">
+        <h3>공식 자료 참고</h3>
+        <span>{items.length}건</span>
+      </div>
+
+      {references.length === 0 ? (
+        <p className="muted-line">{region.name} 공식 자료가 없습니다.</p>
+      ) : (
+        <div className="reference-list">
+          {references.map((item) => (
+            <a
+              key={item.id}
+              className="reference-item"
+              href={item.source_url || '#'}
+              target={item.source_url ? '_blank' : undefined}
+              rel={item.source_url ? 'noreferrer' : undefined}
+            >
+              <span>{formatKoreanDate(item.event_date)}</span>
+              <strong>{item.title}</strong>
+            </a>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
@@ -851,12 +799,16 @@ function getDateFilterLabel(filter: DateFilter) {
   return '전체'
 }
 
-function getRegionSummary(itemCount: number, tipCount: number) {
-  if (itemCount === 0 && tipCount === 0) return '공개 일정과 팁을 기다리는 중'
-  if (itemCount === 0) return `공개 팁 ${tipCount}개`
-  if (tipCount === 0) return `일정 ${itemCount}건`
+function getPanelTitle(panel: AppPanel, regionName: string) {
+  if (panel === 'tips') return `${regionName} 제보`
+  if (panel === 'sources') return `${regionName} 공식 자료`
+  return `${regionName} 관련 후보`
+}
 
-  return `일정 ${itemCount}건, 팁 ${tipCount}개`
+function getPanelSummary(panel: AppPanel, candidateCount: number, officialCount: number, tipCount: number) {
+  if (panel === 'tips') return `공개 제보 ${tipCount}건`
+  if (panel === 'sources') return `공식 원문 기준 ${officialCount}건`
+  return `조건 일치 ${candidateCount}건`
 }
 
 function joinTime(start?: string | null, end?: string | null) {
@@ -864,4 +816,35 @@ function joinTime(start?: string | null, end?: string | null) {
   if (start) return start.slice(0, 5)
 
   return '시간 미정'
+}
+
+function isElectionRelatedItem(item: PublicItem) {
+  const text = getSearchText(item).replace(/\s+/g, '')
+  return electionKeywords.some((keyword) => text.includes(keyword.toLowerCase().replace(/\s+/g, '')))
+}
+
+function getSearchText(item: PublicItem) {
+  return [
+    item.title,
+    item.place_name,
+    item.route_text,
+    item.traffic_note,
+    item.participants_text,
+    item.source_title,
+    item.agency,
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase()
+}
+
+function collectSources(items: PublicItem[]) {
+  const sourceMap = new globalThis.Map<string, PublicItem>()
+
+  for (const item of items) {
+    const key = `${item.agency || '공개 원문'}-${item.source_title || item.source_url || item.id}`
+    if (!sourceMap.has(key)) sourceMap.set(key, item)
+  }
+
+  return [...sourceMap.values()]
 }

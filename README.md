@@ -16,8 +16,8 @@ npm run dev
 ```bash
 PUBLIC_SUPABASE_URL=...
 PUBLIC_SUPABASE_PUBLISHABLE_KEY=...
-PUBLIC_SITE_URL=https://wonhyungLee.github.io/63protest
-PUBLIC_BASE_PATH=/63protest
+PUBLIC_SITE_URL=https://weekendfamily.shop
+PUBLIC_BASE_PATH=/
 ```
 
 브라우저에 노출되는 값은 `PUBLIC_` 값만 사용합니다. DB 접속 문자열, service role key, 관리자 토큰은 GitHub Pages나 프론트엔드 코드에 넣지 않습니다.
