@@ -1,0 +1,23 @@
+---
+import '@/styles/global.css'
+
+const title = '전국 집회길'
+const description = '전국 공식 집회, 행사, 교통통제 정보와 지역별 이동 팁을 확인하는 모바일 우선 안내 서비스'
+---
+
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="description" content={description} />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#f7f9f7" />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:type" content="website" />
+    <title>{title}</title>
+  </head>
+  <body>
+    <slot />
+  </body>
+</html>

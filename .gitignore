@@ -1,0 +1,10 @@
+node_modules/
+dist/
+.astro/
+supabase/.branches/
+supabase/.temp/
+.env
+.env.*
+!.env.example
+npm-debug.log*
+개인정보.txt
