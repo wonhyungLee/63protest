@@ -31,8 +31,8 @@ jobs:
         env:
           PUBLIC_SUPABASE_URL: ${{ vars.PUBLIC_SUPABASE_URL }}
           PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ vars.PUBLIC_SUPABASE_PUBLISHABLE_KEY }}
-          PUBLIC_SITE_URL: ${{ vars.PUBLIC_SITE_URL }}
-          PUBLIC_BASE_PATH: /63protest
+          PUBLIC_SITE_URL: https://weekendfamily.shop
+          PUBLIC_BASE_PATH: /
 
       - uses: actions/upload-pages-artifact@v5
         with:
