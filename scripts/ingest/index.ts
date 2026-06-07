@@ -522,30 +522,87 @@ async function upsertPosts(source: SourceConfig, posts: OfficialPostInput[]) {
   return { updatedPosts, parsedItems }
 }
 
+async function recordIngestFailure(source: SourceConfig, error: unknown) {
+  if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) return
+
+  const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, {
+    auth: { persistSession: false },
+  })
+  const startedAt = new Date().toISOString()
+  const message = error instanceof Error ? error.message : String(error)
+
+  const { data: sourceRow } = await supabase
+    .from('sources')
+    .upsert(
+      {
+        region_code: source.regionCode,
+        agency: source.agency,
+        name: source.name,
+        adapter_key: source.adapterKey,
+        list_url: source.listUrl,
+        detail_url_template: source.detailUrlTemplate ?? null,
+        status: 'active',
+        parser_version: source.parserVersion,
+        fetch_mode: 'fetch',
+      },
+      { onConflict: 'region_code,adapter_key' },
+    )
+    .select('id')
+    .single()
+
+  await supabase.from('ingest_runs').insert({
+    source_id: sourceRow?.id ?? null,
+    status: 'failed',
+    started_at: startedAt,
+    finished_at: new Date().toISOString(),
+    error_message: message.slice(0, 1000),
+    meta: { adapterKey: source.adapterKey },
+  })
+}
+
 async function run() {
   const sourceArg = process.argv.find((arg) => arg.startsWith('--source='))?.split('=')[1]
   const limitArg = Number(process.argv.find((arg) => arg.startsWith('--limit='))?.split('=')[1] ?? 5)
   const dryRun = process.argv.includes('--dry-run')
   const selectedSources = sourceArg ? sources.filter((source) => source.adapterKey.includes(sourceArg)) : sources
+  const failures: string[] = []
+  let successes = 0
 
   for (const source of selectedSources) {
-    const posts =
-      source.adapterKey === 'smpa_seoul'
-        ? await fetchSeoulPosts(source, limitArg)
-        : await fetchDaeguPosts(source, limitArg)
-    const itemCount = posts.reduce((total, post) => total + post.items.length, 0)
+    try {
+      const posts =
+        source.adapterKey === 'smpa_seoul'
+          ? await fetchSeoulPosts(source, limitArg)
+          : await fetchDaeguPosts(source, limitArg)
+      const itemCount = posts.reduce((total, post) => total + post.items.length, 0)
 
-    console.log(`${source.adapterKey}: fetched ${posts.length} posts, parsed ${itemCount} items`)
+      console.log(`${source.adapterKey}: fetched ${posts.length} posts, parsed ${itemCount} items`)
 
-    if (dryRun) {
-      for (const post of posts) {
-        console.log(`- ${post.title}: ${post.items.length} items`)
+      if (dryRun) {
+        for (const post of posts) {
+          console.log(`- ${post.title}: ${post.items.length} items`)
+        }
+        successes += 1
+        continue
       }
-      continue
-    }
 
-    const result = await upsertPosts(source, posts)
-    console.log(`${source.adapterKey}: upserted ${result.updatedPosts} posts, ${result.parsedItems} items`)
+      const result = await upsertPosts(source, posts)
+      console.log(`${source.adapterKey}: upserted ${result.updatedPosts} posts, ${result.parsedItems} items`)
+      successes += 1
+    } catch (error) {
+      failures.push(source.adapterKey)
+      console.error(`${source.adapterKey}: ingest failed`)
+      console.error(error)
+      await recordIngestFailure(source, error)
+    }
+  }
+
+  if (successes === 0 && failures.length > 0) {
+    throw new Error(`All selected ingestors failed: ${failures.join(', ')}`)
+  }
+
+  if (failures.length > 0) {
+    console.warn(`Completed with source failures: ${failures.join(', ')}`)
   }
 }
 
