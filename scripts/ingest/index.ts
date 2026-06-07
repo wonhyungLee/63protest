@@ -54,8 +54,8 @@ const sources: SourceConfig[] = [
     regionCode: 'KR-11',
     agency: '서울경찰청',
     name: '오늘의 집회/시위',
-    listUrl: 'https://www.smpa.go.kr/user/nd54882.do',
-    detailUrlTemplate: 'https://www.smpa.go.kr/user/nd54882.do?View&boardNo={sourceKey}',
+    listUrl: 'http://www.smpa.go.kr/user/nd54882.do',
+    detailUrlTemplate: 'http://www.smpa.go.kr/user/nd54882.do?View&boardNo={sourceKey}',
     parserVersion: 'smpa-seoul-pdf-v1',
   },
   {
