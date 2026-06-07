@@ -47,6 +47,24 @@ npm run supabase:deploy-functions
 
 마이그레이션은 `supabase/migrations/20260607134000_init_public_backend.sql`에 있습니다. 공개 프론트엔드는 `public_items`, `public_tips` View만 읽고, 팁 작성은 `submit-tip` Edge Function을 통해 `tips` 테이블에 저장합니다.
 
+## 실제 데이터 수집
+
+서울경찰청과 대구경찰청의 오늘의 집회 게시판 첨부 PDF를 파싱합니다.
+
+```bash
+npm run ingest -- --limit=10
+```
+
+GitHub-hosted runner에서는 두 경찰청 도메인 연결이 차단될 수 있어, 현재 자동 수집은 이 머신의 systemd user timer로 운영합니다.
+
+```bash
+cp scripts/systemd/63protest-ingest.* ~/.config/systemd/user/
+systemctl --user daemon-reload
+systemctl --user enable --now 63protest-ingest.timer
+```
+
+타이머는 매일 06:20, 09:20, 12:20, 15:20, 18:20, 21:20에 실행됩니다. 서비스 역할 키는 파일에 저장하지 않고 Supabase CLI 인증으로 매 실행 조회합니다.
+
 ## 빌드
 
 ```bash

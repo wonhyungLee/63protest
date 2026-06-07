@@ -1,0 +1,7 @@
+[Unit]
+Description=Ingest official police assembly data for 63protest
+
+[Service]
+Type=oneshot
+WorkingDirectory=/home/dldnjsrk/6.3지방선거/집회누리집
+ExecStart=/usr/bin/env bash /home/dldnjsrk/6.3지방선거/집회누리집/scripts/run-ingest.sh
