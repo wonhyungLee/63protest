@@ -78,38 +78,45 @@ function requiredEnv(name: string) {
   return value
 }
 
-async function fetchText(url: string) {
-  const response = await fetch(url, {
-    headers: {
-      'User-Agent': userAgent,
-      'Accept-Language': 'ko-KR,ko;q=0.9,en;q=0.5',
+async function curlBuffer(url: string) {
+  const { stdout } = await execFileAsync(
+    'curl',
+    [
+      '--http1.1',
+      '--location',
+      '--silent',
+      '--show-error',
+      '--fail',
+      '--compressed',
+      '--retry',
+      '3',
+      '--retry-delay',
+      '2',
+      '--user-agent',
+      userAgent,
+      '--header',
+      'Accept-Language: ko-KR,ko;q=0.9,en;q=0.5',
+      url,
+    ],
+    {
+      encoding: 'buffer',
+      maxBuffer: 20 * 1024 * 1024,
     },
-  })
+  )
 
-  if (!response.ok) {
-    throw new Error(`Fetch failed ${response.status} ${response.statusText}: ${url}`)
-  }
+  return Buffer.isBuffer(stdout) ? stdout : Buffer.from(stdout)
+}
 
-  return response.text()
+async function fetchText(url: string) {
+  return (await curlBuffer(url)).toString('utf8')
 }
 
 async function fetchPdfText(url: string) {
-  const response = await fetch(url, {
-    headers: {
-      'User-Agent': userAgent,
-      'Accept-Language': 'ko-KR,ko;q=0.9,en;q=0.5',
-    },
-  })
-
-  if (!response.ok) {
-    throw new Error(`PDF fetch failed ${response.status} ${response.statusText}: ${url}`)
-  }
-
   const dir = await mkdtemp(join(tmpdir(), 'assembly-pdf-'))
   const filePath = join(dir, 'source.pdf')
 
   try {
-    await writeFile(filePath, Buffer.from(await response.arrayBuffer()))
+    await writeFile(filePath, await curlBuffer(url))
     const { stdout } = await execFileAsync('pdftotext', ['-layout', filePath, '-'], {
       maxBuffer: 10 * 1024 * 1024,
     })
