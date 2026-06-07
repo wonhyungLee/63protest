@@ -35,7 +35,7 @@ const kindFilters: Array<{ value: KindFilter; label: string }> = [
 ]
 
 const panelOptions: Array<{ value: AppPanel; label: string; icon: typeof CalendarDays }> = [
-  { value: 'schedule', label: '관련 후보', icon: CalendarDays },
+  { value: 'schedule', label: '집회 정보', icon: CalendarDays },
   { value: 'tips', label: '제보', icon: MessageCircle },
   { value: 'sources', label: '공식 자료', icon: FileText },
 ]
@@ -190,8 +190,8 @@ export default function NationalAssemblyRoadApp() {
             <ShieldCheck size={21} />
           </span>
           <span>
-            <strong>6.3 집회 모니터</strong>
-            <small>재선거 요구·선거 관련 집회 후보</small>
+            <strong>재선거 요구 집회 정보</strong>
+            <small>6.3 지방선거 이후 집회·근거 정리</small>
           </span>
         </div>
 
@@ -201,16 +201,16 @@ export default function NationalAssemblyRoadApp() {
       <main className="workspace">
         <section className="overview-panel" aria-label="요약">
           <div className="overview-copy">
-            <p className="eyebrow">출처 기반 후보 목록</p>
-            <h1>6.3 지방선거 관련 집회만 먼저 추려서 보여줍니다.</h1>
+            <p className="eyebrow">출처 기반 집회 정보</p>
+            <h1>재선거 요구 집회 정보를 한 곳에 정리합니다.</h1>
             <p>
-              경찰 신고 자료는 참고 출처로 유지하고, 선거·재선거 관련 키워드가 확인된 일정만 기본 목록에 올립니다.
+              경찰 신고 자료는 참고 출처로 유지하고, 재선거 요구와 직접 관련된 일정·장소·근거를 중심으로 보여줍니다.
             </p>
           </div>
 
           <div className="metric-grid" aria-label={`${selectedRegion.name} 요약`}>
-            <MetricTile label="오늘 후보" value={todayCount} />
-            <MetricTile label="이번 주 후보" value={weekCount} />
+            <MetricTile label="오늘 집회" value={todayCount} />
+            <MetricTile label="이번 주 집회" value={weekCount} />
             <MetricTile label="공식 자료" value={officialCount} />
             <MetricTile label="제보" value={regionTips.length} />
           </div>
@@ -398,9 +398,9 @@ function SchedulePanel({
       <EmptyState
         actionLabel="필터 초기화"
         icon={CalendarDays}
-        message={`${region.name}에서 조건에 맞는 6.3 관련 후보가 아직 없습니다. 공식 자료 ${referenceCount}건은 참고 자료에 보관되어 있습니다.`}
+        message={`${region.name}에서 조건에 맞는 재선거 요구 집회 정보가 아직 없습니다. 공식 자료 ${referenceCount}건은 참고 자료에 보관되어 있습니다.`}
         onAction={resetFilters}
-        title="관련 후보 없음"
+        title="집회 정보 없음"
       />
     )
   }
@@ -410,7 +410,7 @@ function SchedulePanel({
       {dataMode !== 'live' && (
         <div className="data-note">
           <Database size={16} />
-          <span>현재 화면은 시연 데이터입니다. 운영 데이터가 연결되면 실제 후보만 표시됩니다.</span>
+          <span>현재 화면은 시연 데이터입니다. 운영 데이터가 연결되면 실제 재선거 요구 집회 정보만 표시됩니다.</span>
         </div>
       )}
 
@@ -602,7 +602,7 @@ function TipComposer({
       <div className="composer-header">
         <div>
           <p className="eyebrow">현장 제보</p>
-          <h3>{region.name} 후보 보강</h3>
+          <h3>{region.name} 집회 정보 보강</h3>
         </div>
         <span>{body.trim().length}/500</span>
       </div>
@@ -628,7 +628,7 @@ function TipComposer({
       />
 
       <div className="composer-row">
-        <select value={itemId} onChange={(event) => setItemId(event.target.value)} aria-label="관련 후보">
+        <select value={itemId} onChange={(event) => setItemId(event.target.value)} aria-label="관련 집회 정보">
           <option value="">지역 전체</option>
           {items.slice(0, 20).map((item) => (
             <option key={item.id} value={item.id}>
@@ -721,7 +721,7 @@ function DataNotice({ mode }: { mode: DataMode }) {
       <div>
         <h3>표시 기준</h3>
         <p>
-          기본 목록은 6.3 지방선거, 재선거 요구, 선거 관련 키워드가 일정 제목·장소·원문명에 잡힌 항목만
+          기본 목록은 재선거 요구 집회와 관련된 키워드가 일정 제목·장소·원문명에 잡힌 항목만
           보여줍니다.
         </p>
         <span>{mode === 'live' ? '운영 데이터 기준' : '시연 데이터 기준'}</span>
@@ -802,7 +802,7 @@ function getDateFilterLabel(filter: DateFilter) {
 function getPanelTitle(panel: AppPanel, regionName: string) {
   if (panel === 'tips') return `${regionName} 제보`
   if (panel === 'sources') return `${regionName} 공식 자료`
-  return `${regionName} 관련 후보`
+  return `${regionName} 재선거 요구 집회`
 }
 
 function getPanelSummary(panel: AppPanel, candidateCount: number, officialCount: number, tipCount: number) {
